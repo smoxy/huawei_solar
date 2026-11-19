@@ -137,6 +137,30 @@
             "name": "SmartLogger"
         }
     },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Polling intervals",
+                "description": "Configure how often the device is polled, in seconds. Shorter intervals give more up-to-date values but put more load on the device, which only supports a limited number of Modbus requests. Changes are applied by reloading the integration.",
+                "data": {
+                    "emma_power_interval": "EMMA power and battery charge interval (s)",
+                    "emma_energy_interval": "EMMA energy counters interval (s)",
+                    "inverter_interval": "Inverter interval (s)",
+                    "power_meter_interval": "Power meter interval (s)",
+                    "energy_storage_interval": "Battery interval (s)",
+                    "configuration_interval": "Configuration interval (s)"
+                },
+                "data_description": {
+                    "emma_power_interval": "Used for the EMMA instantaneous power sensors and battery state of capacity. Minimum 2 seconds.",
+                    "emma_energy_interval": "Used for the EMMA energy counters and all other EMMA sensors. Minimum 2 seconds.",
+                    "inverter_interval": "Used for the inverters and the other non-EMMA devices. Minimum 2 seconds.",
+                    "power_meter_interval": "Used for the power meter connected to an inverter. Minimum 2 seconds.",
+                    "energy_storage_interval": "Used for the batteries connected to an inverter. Minimum 2 seconds.",
+                    "configuration_interval": "Used for the configuration values (only with parameter configuration enabled). Minimum 60 seconds."
+                }
+            }
+        }
+    },
     "entity": {
         "button": {
             "stop_forcible_charge": {

@@ -137,6 +137,30 @@
             "name": "SmartLogger"
         }
     },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Intervalli di aggiornamento",
+                "description": "Imposta ogni quanto tempo il dispositivo viene interrogato, in secondi. Intervalli più brevi danno valori più aggiornati ma aumentano il carico sul dispositivo, che supporta solo un numero limitato di richieste Modbus. Le modifiche vengono applicate ricaricando l'integrazione.",
+                "data": {
+                    "emma_power_interval": "Intervallo potenze e carica batteria EMMA (s)",
+                    "emma_energy_interval": "Intervallo contatori di energia EMMA (s)",
+                    "inverter_interval": "Intervallo inverter (s)",
+                    "power_meter_interval": "Intervallo contatore di energia (s)",
+                    "energy_storage_interval": "Intervallo batterie (s)",
+                    "configuration_interval": "Intervallo configurazione (s)"
+                },
+                "data_description": {
+                    "emma_power_interval": "Usato per i sensori di potenza istantanea dell'EMMA e per lo stato di carica della batteria. Minimo 2 secondi.",
+                    "emma_energy_interval": "Usato per i contatori di energia dell'EMMA e per tutti gli altri sensori dell'EMMA. Minimo 2 secondi.",
+                    "inverter_interval": "Usato per gli inverter e per gli altri dispositivi diversi dall'EMMA. Minimo 2 secondi.",
+                    "power_meter_interval": "Usato per il contatore di energia collegato a un inverter. Minimo 2 secondi.",
+                    "energy_storage_interval": "Usato per le batterie collegate a un inverter. Minimo 2 secondi.",
+                    "configuration_interval": "Usato per i valori di configurazione (solo con la configurazione dei parametri abilitata). Minimo 60 secondi."
+                }
+            }
+        }
+    },
     "entity": {
         "button": {
             "stop_forcible_charge": {

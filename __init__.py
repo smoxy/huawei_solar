@@ -1,5 +1,6 @@
 """The Huawei Solar integration."""
 
+from datetime import timedelta
 import logging
 
 from homeassistant.config_entries import ConfigEntry
@@ -40,12 +41,19 @@ from tmodbus.exceptions import IllegalFunctionError
 
 from .const import (
     CONF_BAUDRATE,
+    CONF_CONFIGURATION_INTERVAL,
+    CONF_EMMA_ENERGY_INTERVAL,
+    CONF_EMMA_POWER_INTERVAL,
     CONF_ENABLE_PARAMETER_CONFIGURATION,
+    CONF_ENERGY_STORAGE_INTERVAL,
+    CONF_INVERTER_INTERVAL,
+    CONF_POWER_METER_INTERVAL,
     CONF_SLAVE_IDS,
     CONFIGURATION_UPDATE_INTERVAL,
     DATA_DEVICE_DATAS,
     DEFAULT_BAUDRATE,
     DOMAIN,
+    EMMA_POWER_UPDATE_INTERVAL,
     ENERGY_STORAGE_UPDATE_INTERVAL,
     INVERTER_UPDATE_INTERVAL,
     OPTIMIZER_UPDATE_INTERVAL,
@@ -115,6 +123,16 @@ PLATFORMS: list[Platform] = [
     Platform.SENSOR,
     Platform.SWITCH,
 ]
+
+
+def _get_update_interval(
+    entry: ConfigEntry, option: str, default: timedelta
+) -> timedelta:
+    """Return the polling interval configured in the options (in seconds), or the default."""
+    seconds = entry.options.get(option)
+    if seconds is None:
+        return default
+    return timedelta(seconds=seconds)
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -386,7 +404,9 @@ async def _setup_inverter_device_data(
         _LOGGER,
         device=device,
         name=f"{device.serial_number}_data_update_coordinator",
-        update_interval=INVERTER_UPDATE_INTERVAL,
+        update_interval=_get_update_interval(
+            entry, CONF_INVERTER_INTERVAL, INVERTER_UPDATE_INTERVAL
+        ),
     )
 
     # Add power meter device if a power meter is detected
@@ -403,7 +423,9 @@ async def _setup_inverter_device_data(
             _LOGGER,
             device=device,
             name=f"{device.serial_number}_power_meter_data_update_coordinator",
-            update_interval=POWER_METER_UPDATE_INTERVAL,
+            update_interval=_get_update_interval(
+                entry, CONF_POWER_METER_INTERVAL, POWER_METER_UPDATE_INTERVAL
+            ),
         )
     else:
         power_meter_device_info = None
@@ -426,7 +448,9 @@ async def _setup_inverter_device_data(
             _LOGGER,
             device=device,
             name=f"{device.serial_number}_battery_data_update_coordinator",
-            update_interval=ENERGY_STORAGE_UPDATE_INTERVAL,
+            update_interval=_get_update_interval(
+                entry, CONF_ENERGY_STORAGE_INTERVAL, ENERGY_STORAGE_UPDATE_INTERVAL
+            ),
         )
     else:
         battery_device_info = None
@@ -530,7 +554,9 @@ async def _setup_inverter_device_data(
             _LOGGER,
             device=device,
             name=f"{device.serial_number}_config_data_update_coordinator",
-            update_interval=CONFIGURATION_UPDATE_INTERVAL,
+            update_interval=_get_update_interval(
+                entry, CONF_CONFIGURATION_INTERVAL, CONFIGURATION_UPDATE_INTERVAL
+            ),
         )
     else:
         configuration_update_coordinator = None
@@ -601,12 +627,33 @@ async def _setup_device_data(
         via_device_id=via_device_id,
     )
 
+    if isinstance(device, EMMADevice):
+        update_interval = _get_update_interval(
+            entry, CONF_EMMA_ENERGY_INTERVAL, INVERTER_UPDATE_INTERVAL
+        )
+        # Fast-changing power/SOC values get their own coordinator, so that they
+        # can be polled more often than the (slow-moving) energy counters.
+        fast_update_coordinator = HuaweiSolarUpdateCoordinator(
+            hass,
+            _LOGGER,
+            device=device,
+            name=f"{device.serial_number}_fast_data_update_coordinator",
+            update_interval=_get_update_interval(
+                entry, CONF_EMMA_POWER_INTERVAL, EMMA_POWER_UPDATE_INTERVAL
+            ),
+        )
+    else:
+        update_interval = _get_update_interval(
+            entry, CONF_INVERTER_INTERVAL, INVERTER_UPDATE_INTERVAL
+        )
+        fast_update_coordinator = None
+
     update_coordinator = HuaweiSolarUpdateCoordinator(
         hass,
         _LOGGER,
         device=device,
         name=f"{device.serial_number}_data_update_coordinator",
-        update_interval=INVERTER_UPDATE_INTERVAL,
+        update_interval=update_interval,
     )
 
     if entry.data.get(CONF_ENABLE_PARAMETER_CONFIGURATION, False):
@@ -615,7 +662,9 @@ async def _setup_device_data(
             _LOGGER,
             device=device,
             name=f"{device.serial_number}_config_data_update_coordinator",
-            update_interval=CONFIGURATION_UPDATE_INTERVAL,
+            update_interval=_get_update_interval(
+                entry, CONF_CONFIGURATION_INTERVAL, CONFIGURATION_UPDATE_INTERVAL
+            ),
         )
     else:
         configuration_update_coordinator = None
@@ -626,4 +675,5 @@ async def _setup_device_data(
         device_info=device_info,
         update_coordinator=update_coordinator,
         configuration_update_coordinator=configuration_update_coordinator,
+        fast_update_coordinator=fast_update_coordinator,
     )
