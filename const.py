@@ -14,6 +14,17 @@ CONF_SLAVE_IDS = "slave_ids"
 CONF_ENABLE_PARAMETER_CONFIGURATION = "enable_parameter_configuration"
 CONF_BAUDRATE = "baudrate"
 
+# Option keys (entry.options). All polling intervals are expressed in seconds.
+CONF_EMMA_POWER_INTERVAL = "emma_power_interval"
+CONF_EMMA_ENERGY_INTERVAL = "emma_energy_interval"
+CONF_INVERTER_INTERVAL = "inverter_interval"
+CONF_POWER_METER_INTERVAL = "power_meter_interval"
+CONF_ENERGY_STORAGE_INTERVAL = "energy_storage_interval"
+CONF_CONFIGURATION_INTERVAL = "configuration_interval"
+
+MIN_UPDATE_INTERVAL_SECONDS = 2
+MIN_CONFIGURATION_INTERVAL_SECONDS = 60
+
 DATA_DEVICE_DATAS = "device_datas"
 DATA_UPDATE_COORDINATORS = "update_coordinators"
 
@@ -22,6 +33,10 @@ POWER_METER_UPDATE_INTERVAL = timedelta(seconds=30)
 ENERGY_STORAGE_UPDATE_INTERVAL = timedelta(seconds=30)
 # configuration can only change when edited through FusionSolar web or app
 CONFIGURATION_UPDATE_INTERVAL = timedelta(minutes=15)
+# The EMMA power/SOC registers are polled on a separate coordinator. The default
+# is identical to the regular EMMA interval, so behaviour only changes when the
+# user configures a faster interval in the options.
+EMMA_POWER_UPDATE_INTERVAL = INVERTER_UPDATE_INTERVAL
 # optimizer data is only refreshed every 5 minutes by the inverter.
 OPTIMIZER_UPDATE_INTERVAL = timedelta(minutes=5)
 

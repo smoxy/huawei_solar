@@ -1,6 +1,6 @@
 """Typing for the Huawei Solar integration."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TypedDict, cast
 
 from huawei_solar import HuaweiSolarDevice, RegisterName, SUN2000Device
@@ -24,6 +24,10 @@ class HuaweiSolarDeviceData:
     device_info: DeviceInfo
     update_coordinator: HuaweiSolarUpdateCoordinator
     configuration_update_coordinator: HuaweiSolarUpdateCoordinator | None
+    # Optional second coordinator for fast-changing values (only used for EMMA).
+    fast_update_coordinator: HuaweiSolarUpdateCoordinator | None = field(
+        default=None, kw_only=True
+    )
 
 
 @dataclass

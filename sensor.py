@@ -1776,15 +1776,36 @@ EMMA_SENSOR_DESCRIPTIONS: tuple[HuaweiSolarSensorEntityDescription, ...] = (
 )
 
 
+# Live values of the EMMA (instantaneous powers and battery state of capacity).
+# They are located in one contiguous register block and are polled by the fast
+# coordinator, so they can be refreshed more often than the energy counters.
+EMMA_FAST_REGISTER_NAMES: frozenset[str] = frozenset(
+    {
+        rn.PV_OUTPUT_POWER,
+        rn.LOAD_POWER,
+        rn.FEED_IN_POWER,
+        rn.BATTERY_CHARGE_DISCHARGE_POWER,
+        rn.INVERTER_ACTIVE_POWER,
+        rn.STATE_OF_CAPACITY,
+    }
+)
+
+
 def create_emma_entities(
     ucs: HuaweiSolarDeviceData,
 ) -> list["SensorEntity"]:
     """Create EMMA sensor entities."""
     assert isinstance(ucs.device, EMMADevice)
 
+    fast_coordinator = ucs.fast_update_coordinator or ucs.update_coordinator
+
     entities: list[SensorEntity] = [
         HuaweiSolarSensorEntity(
-            ucs.update_coordinator, entity_description, ucs.device_info
+            fast_coordinator
+            if entity_description.key in EMMA_FAST_REGISTER_NAMES
+            else ucs.update_coordinator,
+            entity_description,
+            ucs.device_info,
         )
         for entity_description in EMMA_SENSOR_DESCRIPTIONS
     ]

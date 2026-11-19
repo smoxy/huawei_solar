@@ -28,7 +28,12 @@ from tmodbus.exceptions import ModbusConnectionError
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.config_entries import ConfigFlowResult
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlowResult,
+    OptionsFlowWithReload,
+)
+from homeassistant.core import callback
 from homeassistant.const import (
     CONF_HOST,
     CONF_PASSWORD,
@@ -46,13 +51,26 @@ from homeassistant.helpers.selector import (
 
 from .const import (
     CONF_BAUDRATE,
+    CONF_CONFIGURATION_INTERVAL,
+    CONF_EMMA_ENERGY_INTERVAL,
+    CONF_EMMA_POWER_INTERVAL,
     CONF_ENABLE_PARAMETER_CONFIGURATION,
+    CONF_ENERGY_STORAGE_INTERVAL,
+    CONF_INVERTER_INTERVAL,
+    CONF_POWER_METER_INTERVAL,
     CONF_SLAVE_IDS,
+    CONFIGURATION_UPDATE_INTERVAL,
     DEFAULT_BAUDRATE,
     DEFAULT_PORT,
     DEFAULT_SERIAL_SLAVE_ID,
     DEFAULT_USERNAME,
     DOMAIN,
+    EMMA_POWER_UPDATE_INTERVAL,
+    ENERGY_STORAGE_UPDATE_INTERVAL,
+    INVERTER_UPDATE_INTERVAL,
+    MIN_CONFIGURATION_INTERVAL_SECONDS,
+    MIN_UPDATE_INTERVAL_SECONDS,
+    POWER_METER_UPDATE_INTERVAL,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -522,6 +540,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
     MINOR_VERSION = 2
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlowWithReload:
+        """Return the options flow, which lets the user tune the polling intervals."""
+        return HuaweiSolarOptionsFlow()
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -1323,6 +1347,62 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._abort_if_unique_id_configured(updates=data)
 
         return self.async_create_entry(title=inverter_info["model_name"], data=data)
+
+
+# Polling options: (option key, default in seconds, minimum in seconds)
+_POLLING_OPTIONS: tuple[tuple[str, int, int], ...] = (
+    (
+        CONF_EMMA_POWER_INTERVAL,
+        int(EMMA_POWER_UPDATE_INTERVAL.total_seconds()),
+        MIN_UPDATE_INTERVAL_SECONDS,
+    ),
+    (
+        CONF_EMMA_ENERGY_INTERVAL,
+        int(INVERTER_UPDATE_INTERVAL.total_seconds()),
+        MIN_UPDATE_INTERVAL_SECONDS,
+    ),
+    (
+        CONF_INVERTER_INTERVAL,
+        int(INVERTER_UPDATE_INTERVAL.total_seconds()),
+        MIN_UPDATE_INTERVAL_SECONDS,
+    ),
+    (
+        CONF_POWER_METER_INTERVAL,
+        int(POWER_METER_UPDATE_INTERVAL.total_seconds()),
+        MIN_UPDATE_INTERVAL_SECONDS,
+    ),
+    (
+        CONF_ENERGY_STORAGE_INTERVAL,
+        int(ENERGY_STORAGE_UPDATE_INTERVAL.total_seconds()),
+        MIN_UPDATE_INTERVAL_SECONDS,
+    ),
+    (
+        CONF_CONFIGURATION_INTERVAL,
+        int(CONFIGURATION_UPDATE_INTERVAL.total_seconds()),
+        MIN_CONFIGURATION_INTERVAL_SECONDS,
+    ),
+)
+
+
+class HuaweiSolarOptionsFlow(OptionsFlowWithReload):
+    """Options flow to configure the polling intervals (reloads the entry on change)."""
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Let the user configure the polling intervals."""
+        if user_input is not None:
+            return self.async_create_entry(data=user_input)
+
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    key, default=self.config_entry.options.get(key, default)
+                ): vol.All(vol.Coerce(int), vol.Range(min=minimum))
+                for key, default, minimum in _POLLING_OPTIONS
+            }
+        )
+        return self.async_show_form(step_id="init", data_schema=schema)
 
 
 class UnitIdsParseException(Exception):
