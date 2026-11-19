@@ -627,26 +627,29 @@ async def _setup_device_data(
         via_device_id=via_device_id,
     )
 
+    fast_update_coordinator = None
     if isinstance(device, EMMADevice):
         update_interval = _get_update_interval(
             entry, CONF_EMMA_ENERGY_INTERVAL, INVERTER_UPDATE_INTERVAL
         )
+        fast_interval = _get_update_interval(
+            entry, CONF_EMMA_POWER_INTERVAL, EMMA_POWER_UPDATE_INTERVAL
+        )
         # Fast-changing power/SOC values get their own coordinator, so that they
         # can be polled more often than the (slow-moving) energy counters.
-        fast_update_coordinator = HuaweiSolarUpdateCoordinator(
-            hass,
-            _LOGGER,
-            device=device,
-            name=f"{device.serial_number}_fast_data_update_coordinator",
-            update_interval=_get_update_interval(
-                entry, CONF_EMMA_POWER_INTERVAL, EMMA_POWER_UPDATE_INTERVAL
-            ),
-        )
+        # Without a distinct interval, everything stays in one batched read as upstream.
+        if fast_interval != update_interval:
+            fast_update_coordinator = HuaweiSolarUpdateCoordinator(
+                hass,
+                _LOGGER,
+                device=device,
+                name=f"{device.serial_number}_fast_data_update_coordinator",
+                update_interval=fast_interval,
+            )
     else:
         update_interval = _get_update_interval(
             entry, CONF_INVERTER_INTERVAL, INVERTER_UPDATE_INTERVAL
         )
-        fast_update_coordinator = None
 
     update_coordinator = HuaweiSolarUpdateCoordinator(
         hass,
