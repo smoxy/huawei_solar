@@ -108,6 +108,8 @@ the FusionSolar App. The default password is either `00000a` or `0000000a`. If n
 
 ## Inverter polling frequency
 
+The polling intervals can be set in the integration options (Settings → Devices & services → Huawei Solar → Configure), in seconds: EMMA live values (power and state of capacity), EMMA energy counters, inverter, power meter, battery and configuration. Minimum 2 s (60 s for configuration), maximum 1 day. When the EMMA live interval differs from the EMMA energy interval, the live values are read by a separate, faster coordinator. The EMMA refreshes its own values roughly every 8 seconds, so shorter intervals do not give fresher data. Without options, the defaults below apply.
+
 The integration will poll the inverter for new values every 30 seconds. If you wish to receive fresh inverter data less (or more) frequently, you can disable the automatic refresh in the integration's system options (Enable polling for updates) and create your own automations with your desired polling frequency. If your installation contains a power meter and/or battery, then you need to create a separate data polling automation for these devices. This allows for fine grained control of which entities must be updated more quickly.
 
 ```yaml

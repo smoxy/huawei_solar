@@ -76,6 +76,11 @@ async def async_get_config_entry_diagnostics(
             dd.update_coordinator.data
         )
 
+        if dd.fast_update_coordinator:
+            diagnostics_data[f"device_{dd.device.client.unit_id}_fast_data"] = (
+                dd.fast_update_coordinator.data
+            )
+
         if dd.configuration_update_coordinator:
             diagnostics_data[f"device_{dd.device.client.unit_id}_config_data"] = (
                 dd.configuration_update_coordinator.data

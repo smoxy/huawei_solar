@@ -68,6 +68,7 @@ from .const import (
     EMMA_POWER_UPDATE_INTERVAL,
     ENERGY_STORAGE_UPDATE_INTERVAL,
     INVERTER_UPDATE_INTERVAL,
+    MAX_UPDATE_INTERVAL_SECONDS,
     MIN_CONFIGURATION_INTERVAL_SECONDS,
     MIN_UPDATE_INTERVAL_SECONDS,
     POWER_METER_UPDATE_INTERVAL,
@@ -1398,7 +1399,10 @@ class HuaweiSolarOptionsFlow(OptionsFlowWithReload):
             {
                 vol.Required(
                     key, default=self.config_entry.options.get(key, default)
-                ): vol.All(vol.Coerce(int), vol.Range(min=minimum))
+                ): vol.All(
+                    vol.Coerce(int),
+                    vol.Range(min=minimum, max=MAX_UPDATE_INTERVAL_SECONDS),
+                )
                 for key, default, minimum in _POLLING_OPTIONS
             }
         )
