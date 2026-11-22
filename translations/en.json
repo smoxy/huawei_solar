@@ -1501,6 +1501,50 @@
                 }
             },
             "name": "Stop the forcible charge or discharge"
+        },
+        "get_performance_data": {
+            "name": "Get performance data",
+            "description": "Read historical performance data stored on the device (read-only).",
+            "fields": {
+                "device_id": {
+                    "name": "Device",
+                    "description": "The Huawei Solar device (inverter or EMMA) to read from"
+                },
+                "request_type": {
+                    "name": "Request type",
+                    "description": "Which history to read, e.g. output_power or meter_power (5-minute values)"
+                },
+                "start": {
+                    "name": "Start",
+                    "description": "Start of the window"
+                },
+                "end": {
+                    "name": "End",
+                    "description": "End of the window (at most 31 days after start)"
+                },
+                "cycle": {
+                    "name": "Cycle",
+                    "description": "Optional interval of the data points in seconds (defaults per request type)"
+                }
+            }
+        },
+        "get_history_alarms": {
+            "name": "Get history alarms",
+            "description": "Read the alarm history stored on the device (read-only).",
+            "fields": {
+                "device_id": {
+                    "name": "Device",
+                    "description": "The Huawei Solar device to read from"
+                },
+                "start": {
+                    "name": "Start",
+                    "description": "Start of the window"
+                },
+                "end": {
+                    "name": "End",
+                    "description": "End of the window (at most 31 days after start)"
+                }
+            }
         }
     }
 }

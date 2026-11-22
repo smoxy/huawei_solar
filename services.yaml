@@ -188,3 +188,63 @@ set_fixed_charge_periods:
       selector:
         text:
           multiline: true
+
+get_performance_data:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: huawei_solar
+    request_type:
+      required: true
+      default: output_power
+      selector:
+        select:
+          options:
+            - "hour_power"
+            - "day_power"
+            - "month_power"
+            - "year_power"
+            - "output_power"
+            - "insulation_resistance"
+            - "battery_charge_and_discharge_power"
+            - "meter_power"
+            - "battery_charge_day_power"
+            - "battery_discharge_day_power"
+            - "absorb_hour_power"
+            - "absorb_day_power"
+            - "absorb_month_power"
+            - "absorb_year_power"
+    start:
+      required: true
+      selector:
+        datetime:
+    end:
+      required: true
+      selector:
+        datetime:
+    cycle:
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 31536000
+          unit_of_measurement: "s"
+          mode: box
+
+get_history_alarms:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: huawei_solar
+    start:
+      required: true
+      selector:
+        datetime:
+    end:
+      required: true
+      selector:
+        datetime:

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 from functools import partial
+from importlib import metadata
 import logging
 import re
 from typing import Any, Literal, TypedDict, TypeVar
@@ -26,10 +28,17 @@ import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import ATTR_DEVICE_ID
-from homeassistant.core import HomeAssistant, ServiceCall, callback
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.core import (
+    HomeAssistant,
+    ServiceCall,
+    ServiceResponse,
+    SupportsResponse,
+    callback,
+)
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr
 import homeassistant.helpers.config_validation as cv
+from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_ENABLE_PARAMETER_CONFIGURATION,
@@ -39,6 +48,8 @@ from .const import (
     SERVICE_FORCIBLE_CHARGE_SOC,
     SERVICE_FORCIBLE_DISCHARGE,
     SERVICE_FORCIBLE_DISCHARGE_SOC,
+    SERVICE_GET_HISTORY_ALARMS,
+    SERVICE_GET_PERFORMANCE_DATA,
     SERVICE_RESET_MAXIMUM_FEED_GRID_POWER,
     SERVICE_SET_CAPACITY_CONTROL_PERIODS,
     SERVICE_SET_DI_ACTIVE_POWER_SCHEDULING,
@@ -60,6 +71,8 @@ ALL_SERVICES = [
     SERVICE_FORCIBLE_CHARGE_SOC,
     SERVICE_FORCIBLE_DISCHARGE,
     SERVICE_FORCIBLE_DISCHARGE_SOC,
+    SERVICE_GET_HISTORY_ALARMS,
+    SERVICE_GET_PERFORMANCE_DATA,
     SERVICE_RESET_MAXIMUM_FEED_GRID_POWER,
     SERVICE_SET_CAPACITY_CONTROL_PERIODS,
     SERVICE_SET_DI_ACTIVE_POWER_SCHEDULING,
@@ -767,11 +780,180 @@ async def set_fixed_charge_periods(service_call: ServiceCall) -> None:
     _request_configuration_refresh(service_call, dd)
 
 
+######################################################
+# Read-only services: historical data stored on device #
+######################################################
+
+DATA_REQUEST_TYPE = "request_type"
+DATA_START = "start"
+DATA_END = "end"
+DATA_CYCLE = "cycle"
+
+PERFORMANCE_REQUEST_TYPES = [
+    "hour_power",
+    "day_power",
+    "month_power",
+    "year_power",
+    "output_power",
+    "insulation_resistance",
+    "battery_charge_and_discharge_power",
+    "meter_power",
+    "battery_charge_day_power",
+    "battery_discharge_day_power",
+    "absorb_hour_power",
+    "absorb_day_power",
+    "absorb_month_power",
+    "absorb_year_power",
+]
+
+MAXIMUM_HISTORY_SPAN = timedelta(days=31)
+
+GET_PERFORMANCE_DATA_SCHEMA = vol.Schema(
+    {
+        vol.Required(DATA_DEVICE_ID): cv.string,
+        vol.Required(DATA_REQUEST_TYPE): vol.In(PERFORMANCE_REQUEST_TYPES),
+        vol.Required(DATA_START): cv.datetime,
+        vol.Required(DATA_END): cv.datetime,
+        vol.Optional(DATA_CYCLE): vol.All(vol.Coerce(int), vol.Range(min=1)),
+    }
+)
+
+GET_HISTORY_ALARMS_SCHEMA = vol.Schema(
+    {
+        vol.Required(DATA_DEVICE_ID): cv.string,
+        vol.Required(DATA_START): cv.datetime,
+        vol.Required(DATA_END): cv.datetime,
+    }
+)
+
+
+def _library_version() -> str:
+    try:
+        return metadata.version("huawei-solar")
+    except metadata.PackageNotFoundError:
+        return "unknown"
+
+
+def _history_window(service_call: ServiceCall) -> tuple[datetime, datetime]:
+    """Return the requested window as aware datetimes, validating its span."""
+    start: datetime = service_call.data[DATA_START]
+    end: datetime = service_call.data[DATA_END]
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=dt_util.get_default_time_zone())
+    if end.tzinfo is None:
+        end = end.replace(tzinfo=dt_util.get_default_time_zone())
+    if end <= start:
+        raise ServiceValidationError("'end' must be after 'start'")
+    if end - start > MAXIMUM_HISTORY_SPAN:
+        raise ServiceValidationError("The requested window may span at most 31 days")
+    return start, end
+
+
+async def get_performance_data(service_call: ServiceCall) -> ServiceResponse:
+    """Read the historical performance data file (0xA3) stored on a device.
+
+    Read-only: uses Modbus file upload over the existing connection.
+    """
+    dd = _get_device_data(service_call)
+    device = dd.device
+    version = _library_version()
+    if not hasattr(device, "get_performance_data"):
+        raise HomeAssistantError(
+            f"huawei-solar {version} does not support reading performance data"
+        )
+
+    from huawei_solar import PerformanceRequestType  # noqa: PLC0415
+
+    request_type = PerformanceRequestType[
+        service_call.data[DATA_REQUEST_TYPE].upper()
+    ]
+    start, end = _history_window(service_call)
+    cycle = service_call.data.get(DATA_CYCLE)
+
+    try:
+        points = await device.get_performance_data(request_type, start, end, cycle)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.warning("Reading performance data failed: %s", err)
+        return {
+            "ok": False,
+            "library_version": version,
+            "request_type": request_type.name.lower(),
+            "error": f"{type(err).__name__}: {err}",
+        }
+
+    return {
+        "ok": True,
+        "library_version": version,
+        "request_type": request_type.name.lower(),
+        "count": len(points),
+        "points": [
+            {"time": point.time.isoformat(), "value": point.value} for point in points
+        ],
+    }
+
+
+async def get_history_alarms(service_call: ServiceCall) -> ServiceResponse:
+    """Read the history alarms file (0xA2) stored on a device. Read-only."""
+    dd = _get_device_data(service_call)
+    device = dd.device
+    version = _library_version()
+    if not hasattr(device, "get_history_alarms"):
+        raise HomeAssistantError(
+            f"huawei-solar {version} does not support reading history alarms"
+        )
+
+    start, end = _history_window(service_call)
+
+    try:
+        alarms = await device.get_history_alarms(start, end)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.warning("Reading history alarms failed: %s", err)
+        return {
+            "ok": False,
+            "library_version": version,
+            "error": f"{type(err).__name__}: {err}",
+        }
+
+    return {
+        "ok": True,
+        "library_version": version,
+        "count": len(alarms),
+        "alarms": [
+            {
+                "alarm_id": alarm.alarm_id,
+                "name": alarm.name,
+                "level": str(alarm.level),
+                "reason_id": alarm.reason_id,
+                "equip_id": alarm.equip_id,
+                "occur_time": alarm.occur_time.isoformat(),
+                "recover_time": alarm.recover_time.isoformat(),
+            }
+            for alarm in alarms
+        ],
+    }
+
+
 async def async_setup_services(
     hass: HomeAssistant,
     entry: HuaweiSolarConfigEntry,
 ) -> None:
     """Huawei Solar Services Setup."""
+    # Read-only services do not need elevated permissions.
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_GET_PERFORMANCE_DATA,
+        get_performance_data,
+        schema=GET_PERFORMANCE_DATA_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_GET_HISTORY_ALARMS,
+        get_history_alarms,
+        schema=GET_HISTORY_ALARMS_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
+    )
+
     if not entry.data.get(CONF_ENABLE_PARAMETER_CONFIGURATION, False):
         return
 
