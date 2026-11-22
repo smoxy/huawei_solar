@@ -788,6 +788,7 @@ DATA_REQUEST_TYPE = "request_type"
 DATA_START = "start"
 DATA_END = "end"
 DATA_CYCLE = "cycle"
+DATA_INCLUDE_RAW = "include_raw"
 
 PERFORMANCE_REQUEST_TYPES = [
     "hour_power",
@@ -815,6 +816,7 @@ GET_PERFORMANCE_DATA_SCHEMA = vol.Schema(
         vol.Required(DATA_START): cv.datetime,
         vol.Required(DATA_END): cv.datetime,
         vol.Optional(DATA_CYCLE): vol.All(vol.Coerce(int), vol.Range(min=1)),
+        vol.Optional(DATA_INCLUDE_RAW, default=False): cv.boolean,
     }
 )
 
@@ -870,8 +872,28 @@ async def get_performance_data(service_call: ServiceCall) -> ServiceResponse:
     start, end = _history_window(service_call)
     cycle = service_call.data.get(DATA_CYCLE)
 
+    raw: dict[str, Any] = {}
     try:
-        points = await device.get_performance_data(request_type, start, end, cycle)
+        if service_call.data[DATA_INCLUDE_RAW]:
+            # Diagnostics: return the undecoded file as sent by the device.
+            from huawei_solar import InverterPerformanceDataFile  # noqa: PLC0415
+
+            query = InverterPerformanceDataFile.query_within_timespan(
+                request_type, int(start.timestamp()), int(end.timestamp())
+            )
+            file_data = await device.read_file(
+                InverterPerformanceDataFile.FILE_TYPE, query
+            )
+            raw = {
+                "query_hex": query.hex(),
+                "raw_length": len(file_data),
+                "raw_hex": file_data[:1024].hex(),
+            }
+            points = InverterPerformanceDataFile(
+                file_data, request_type=request_type, cycle=cycle
+            ).data_points
+        else:
+            points = await device.get_performance_data(request_type, start, end, cycle)
     except Exception as err:  # noqa: BLE001
         _LOGGER.warning("Reading performance data failed: %s", err)
         return {
@@ -879,6 +901,7 @@ async def get_performance_data(service_call: ServiceCall) -> ServiceResponse:
             "library_version": version,
             "request_type": request_type.name.lower(),
             "error": f"{type(err).__name__}: {err}",
+            **raw,
         }
 
     return {
@@ -889,6 +912,7 @@ async def get_performance_data(service_call: ServiceCall) -> ServiceResponse:
         "points": [
             {"time": point.time.isoformat(), "value": point.value} for point in points
         ],
+        **raw,
     }
 
 

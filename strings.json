@@ -1525,6 +1525,10 @@
                 "cycle": {
                     "name": "Cycle",
                     "description": "Optional interval of the data points in seconds (defaults per request type)"
+                },
+                "include_raw": {
+                    "name": "Include raw data",
+                    "description": "Diagnostics: also return the undecoded file sent by the device (hex, first 1024 bytes); points are decoded without the device time zone correction"
                 }
             }
         },

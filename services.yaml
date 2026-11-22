@@ -232,6 +232,11 @@ get_performance_data:
           max: 31536000
           unit_of_measurement: "s"
           mode: box
+    include_raw:
+      required: false
+      default: false
+      selector:
+        boolean:
 
 get_history_alarms:
   fields:
