@@ -44,6 +44,19 @@ This integration exposes multiple services, allowing you to [actively control th
 
 To enable these advanced features, you need to select 'Elevate permissions' during the setup of this integration.
 
+The read-only `huawei_solar.get_history_alarms` action reads the alarm history stored on a device (active and cleared alarms, with occurrence and recovery time) for a window of at most 31 days, and returns it as a response. It does not need elevated permissions:
+
+```yaml
+action: huawei_solar.get_history_alarms
+data:
+  device_id: <device id of the inverter or EMMA>
+  start: "2026-11-01 00:00:00"
+  end: "2026-11-23 00:00:00"
+response_variable: history
+```
+
+Each alarm in `history.alarms` has `alarm_id`, `name`, `level`, `reason_id`, `equip_id`, `occur_time` and `recover_time`. Times without a time zone are read in the Home Assistant time zone.
+
 ## Prerequisites
 
 **Connection**

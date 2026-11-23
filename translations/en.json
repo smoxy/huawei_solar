@@ -1564,6 +1564,9 @@
         },
         "wrong_device_type": {
             "message": "Got wrong Huawei Solar device type for ID {device_id}: expected {expected_type}, got {actual_type}"
+        },
+        "invalid_history_window": {
+            "message": "'end' must be after 'start', and the window may span at most {maximum_days} days."
         }
     },
     "services": {
@@ -1748,6 +1751,24 @@
                 }
             },
             "name": "Stop the forcible charge or discharge"
+        },
+        "get_history_alarms": {
+            "name": "Get history alarms",
+            "description": "Read the alarm history stored on the device (active and cleared alarms) in a time window of at most 31 days. Read-only; the alarms are returned as a response.",
+            "fields": {
+                "device_id": {
+                    "name": "Device",
+                    "description": "Inverter, EMMA or other Huawei device that keeps an alarm history"
+                },
+                "start": {
+                    "name": "Start",
+                    "description": "Start of the time window"
+                },
+                "end": {
+                    "name": "End",
+                    "description": "End of the time window"
+                }
+            }
         }
     },
     "selector": {

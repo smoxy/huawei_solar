@@ -6,6 +6,7 @@ import functools
 import logging
 import re
 from collections.abc import Callable, Coroutine
+from datetime import datetime, timedelta
 from typing import Any, Literal, TypedDict, TypeVar
 
 import voluptuous as vol
@@ -13,9 +14,16 @@ import voluptuous as vol
 import homeassistant.helpers.config_validation as cv
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import ATTR_DEVICE_ID
-from homeassistant.core import HomeAssistant, ServiceCall, callback
+from homeassistant.core import (
+    HomeAssistant,
+    ServiceCall,
+    ServiceResponse,
+    SupportsResponse,
+    callback,
+)
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import device_registry as dr
+from homeassistant.util import dt as dt_util
 from huawei_solar import (
     EMMADevice,
     HuaweiSolarDevice,
@@ -43,6 +51,7 @@ from .const import (
     SERVICE_FORCIBLE_CHARGE_SOC,
     SERVICE_FORCIBLE_DISCHARGE,
     SERVICE_FORCIBLE_DISCHARGE_SOC,
+    SERVICE_GET_HISTORY_ALARMS,
     SERVICE_RESET_MAXIMUM_FEED_GRID_POWER,
     SERVICE_SET_CAPACITY_CONTROL_PERIODS,
     SERVICE_SET_DI_ACTIVE_POWER_SCHEDULING,
@@ -69,6 +78,10 @@ DATA_POWER_PERCENTAGE = "power_percentage"
 DATA_DURATION = "duration"
 DATA_TARGET_SOC = "target_soc"
 DATA_PERIODS = "periods"
+DATA_START = "start"
+DATA_END = "end"
+
+MAXIMUM_HISTORY_SPAN = timedelta(days=31)
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -916,6 +929,56 @@ async def set_fixed_charge_periods(service_call: ServiceCall) -> None:
     _request_configuration_refresh(service_call, dd)
 
 
+HISTORY_ALARMS_SCHEMA = DEVICE_SCHEMA.extend(
+    {
+        vol.Required(DATA_START): cv.datetime,
+        vol.Required(DATA_END): cv.datetime,
+    }
+)
+
+
+def _history_window(service_call: ServiceCall) -> tuple[datetime, datetime]:
+    """Return the requested window as aware datetimes, validating its span."""
+    start: datetime = service_call.data[DATA_START]
+    end: datetime = service_call.data[DATA_END]
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=dt_util.get_default_time_zone())
+    if end.tzinfo is None:
+        end = end.replace(tzinfo=dt_util.get_default_time_zone())
+    if end <= start or end - start > MAXIMUM_HISTORY_SPAN:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="invalid_history_window",
+            translation_placeholders={
+                "maximum_days": str(MAXIMUM_HISTORY_SPAN.days),
+            },
+        )
+    return start, end
+
+
+async def get_history_alarms(service_call: ServiceCall) -> ServiceResponse:
+    """Read the history alarms file (0xA2) stored on a device. Read-only."""
+    device_data = _get_device_data(service_call)
+    start, end = _history_window(service_call)
+    alarms = await async_call_with_device_error_handling(
+        device_data.device.get_history_alarms(start, end)
+    )
+    return {
+        "alarms": [
+            {
+                "alarm_id": alarm.alarm_id,
+                "name": alarm.name,
+                "level": alarm.level.name.lower(),
+                "reason_id": alarm.reason_id,
+                "equip_id": alarm.equip_id,
+                "occur_time": alarm.occur_time.isoformat(),
+                "recover_time": alarm.recover_time.isoformat(),
+            }
+            for alarm in alarms
+        ],
+    }
+
+
 def _wrap_device_errors(
     func: Callable[[ServiceCall], Coroutine[Any, Any, None]],
 ) -> Callable[[ServiceCall], Coroutine[Any, Any, None]]:
@@ -988,3 +1051,12 @@ def async_setup_services(
             _wrap_device_errors(handler),
             schema=schema,
         )
+
+    # Read-only: returns the alarms as a service response.
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_GET_HISTORY_ALARMS,
+        get_history_alarms,
+        schema=HISTORY_ALARMS_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
+    )

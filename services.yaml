@@ -208,3 +208,19 @@ set_fixed_charge_periods:
       selector:
         text:
           multiline: true
+
+get_history_alarms:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: huawei_solar
+    start:
+      required: true
+      selector:
+        datetime:
+    end:
+      required: true
+      selector:
+        datetime:
