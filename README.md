@@ -13,6 +13,7 @@ This integration exposes the information and functions made available by Huawei 
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
 - [Inverter polling frequency](#inverter-polling-frequency)
+- [Device history services](#device-history-services)
 - [FAQ - Troubleshooting](#faq---troubleshooting)
 
 Looking for more information? The [Wiki](https://github.com/wlcrs/huawei_solar/wiki) contains in-depth documentation and support materials.
@@ -43,6 +44,8 @@ This integration exposes multiple services, allowing you to [actively control th
 ![services](images/services.png)
 
 To enable these advanced features, you need to select 'Elevate permissions' during the setup of this integration.
+
+Two read-only services, `huawei_solar.get_performance_data` and `huawei_solar.get_history_alarms`, read the history stored on the device and do not need elevated permissions. See [Device history services](#device-history-services).
 
 ## Prerequisites
 
@@ -108,7 +111,7 @@ the FusionSolar App. The default password is either `00000a` or `0000000a`. If n
 
 ## Inverter polling frequency
 
-The polling intervals can be set in the integration options (Settings → Devices & services → Huawei Solar → Configure), in seconds: EMMA live values (power and state of capacity), EMMA energy counters, inverter, power meter, battery and configuration. Minimum 2 s (60 s for configuration), maximum 1 day. When the EMMA live interval differs from the EMMA energy interval, the live values are read by a separate, faster coordinator. The EMMA refreshes its own values roughly every 8 seconds, so shorter intervals do not give fresher data. Without options, the defaults below apply.
+The polling intervals can be set in the integration options (Settings → Devices & services → Huawei Solar → Configure), in seconds: EMMA live values (power and state of capacity), EMMA energy counters, inverter, power meter, battery and configuration. Minimum 2 s (60 s for configuration), maximum 1 day. When the EMMA live interval differs from the EMMA energy interval, the live values are read by a separate, faster coordinator. The EMMA refreshes its own values roughly every 8 seconds, so shorter intervals do not give fresher data. Without options, the defaults apply: 30 seconds for the EMMA (live values and energy counters), inverter, power meter and battery, 15 minutes for configuration values, 5 minutes for optimizers (not configurable).
 
 The integration will poll the inverter for new values every 30 seconds. If you wish to receive fresh inverter data less (or more) frequently, you can disable the automatic refresh in the integration's system options (Enable polling for updates) and create your own automations with your desired polling frequency. If your installation contains a power meter and/or battery, then you need to create a separate data polling automation for these devices. This allows for fine grained control of which entities must be updated more quickly.
 
@@ -146,6 +149,45 @@ The integration will poll the inverter for new values every 30 seconds. If you w
 ```
 
 **Note:** optimizer data is refreshed only every 5 minutes, which matches how frequently the inverter refreshes this data. Increasing the update frequency of those entities will thus not result in a higher resolution.
+
+## Device history services
+
+Huawei devices keep a history on board that can be downloaded over the same Modbus connection with the "file upload" commands. Two services expose it. Both are read-only and return their result as a service response: call them from Developer tools → Actions with "Return response", or from a script with `response_variable`. They need a `huawei-solar` library version that provides `get_performance_data` and `get_history_alarms`; otherwise the service raises an error that names the installed version. A request may span at most 31 days, and `start`/`end` without a time zone are read in the Home Assistant time zone.
+
+### `huawei_solar.get_history_alarms`
+
+Reads the history alarms file (0xA2) of a device: active and cleared alarms in the window, with their occurrence and recovery time.
+
+```yaml
+action: huawei_solar.get_history_alarms
+data:
+  device_id: <device id of the inverter or EMMA>
+  start: "2026-11-01 00:00:00"
+  end: "2026-11-23 00:00:00"
+response_variable: alarms
+```
+
+The response contains `ok`, `library_version`, `count` and `alarms`, a list of `alarm_id`, `name`, `level`, `reason_id`, `equip_id`, `occur_time` and `recover_time`. When the device refuses the request, `ok` is `false` and `error` explains why.
+
+### `huawei_solar.get_performance_data`
+
+Reads the performance data file (0xA3): for example 5-minute output power, hourly, daily, monthly or yearly energy, battery charge and discharge power, meter power, or insulation resistance.
+
+```yaml
+action: huawei_solar.get_performance_data
+data:
+  device_id: <device id of the inverter or EMMA>
+  request_type: output_power
+  start: "2026-11-22 00:00:00"
+  end: "2026-11-23 00:00:00"
+response_variable: data
+```
+
+- `request_type`: one of `hour_power`, `day_power`, `month_power`, `year_power`, `output_power`, `insulation_resistance`, `battery_charge_and_discharge_power`, `meter_power`, `battery_charge_day_power`, `battery_discharge_day_power`, `absorb_hour_power`, `absorb_day_power`, `absorb_month_power`, `absorb_year_power`.
+- `cycle` (optional, seconds): the sampling period used to decode the points, when it differs from the default of the request type.
+- `include_raw` (optional, default `false`): adds `query_hex`, `raw_length` and the first 1024 bytes of the undecoded file as `raw_hex`, for diagnostics.
+
+The response contains `ok`, `library_version`, `request_type`, `count` and `points`, a list of `time` and `value`. Not every device fills every request type. On an EMMA-A02 with a SUN2000-L1 inverter (`huawei-solar` 3.1.0), the alarm history worked, but the performance data file came back empty (length 0) for every request type, on both the EMMA and the inverter. Use `include_raw` to check what your device returns.
 
 ## FAQ - Troubleshooting
 
